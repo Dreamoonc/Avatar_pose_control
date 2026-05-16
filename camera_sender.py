@@ -11,7 +11,7 @@ from mediapipe.tasks import python
 from mediapipe.tasks.python import vision
 
 UDP_IP = "127.0.0.1"
-UDP_PORT = 5056
+UDP_PORT = 5005
 
 sock = socket.socket(socket.AF_INET, socket.SOCK_DGRAM)
 
@@ -42,21 +42,24 @@ cap = cv2.VideoCapture(0)
 if not cap.isOpened():
     raise RuntimeError("Could not open camera 0. Check camera permission or try another camera index.")
 
+
 def calculate_angle(a, b, c):
     ax, ay = a
     bx, by = b
     cx, cy = c
-
     angle = math.degrees(
         math.atan2(cy - by, cx - bx) -
         math.atan2(ay - by, ax - bx)
     )
-
     angle = abs(angle)
     if angle > 180:
         angle = 360 - angle
-
     return angle
+
+
+def lm(point):
+    return {"x": point.x, "y": point.y, "visibility": float(point.visibility)}
+
 
 while True:
     ret, frame = cap.read()
@@ -73,26 +76,25 @@ while True:
         landmarks = result.pose_landmarks[0]
 
         shoulder = landmarks[11]  # LEFT_SHOULDER
-        elbow = landmarks[13]     # LEFT_ELBOW
-        wrist = landmarks[15]     # LEFT_WRIST
-        hip = landmarks[23]       # LEFT_HIP
+        elbow    = landmarks[13]  # LEFT_ELBOW
+        wrist    = landmarks[15]  # LEFT_WRIST
 
-        a = (shoulder.x, shoulder.y)
-        b = (elbow.x, elbow.y)
-        c = (wrist.x, wrist.y)
-        hip_point = (hip.x, hip.y)
-
-        left_elbow_angle = calculate_angle(a, b, c)
-        left_shoulder_angle = calculate_angle(hip_point, a, b)
+        left_elbow_angle = calculate_angle(
+            (shoulder.x, shoulder.y),
+            (elbow.x, elbow.y),
+            (wrist.x, wrist.y),
+        )
 
         data = {
-            "left_shoulder": left_shoulder_angle,
-            "left_elbow": left_elbow_angle,
+            "left_elbow":          left_elbow_angle,
+            "left_shoulder_point": lm(shoulder),
+            "left_elbow_point":    lm(elbow),
+            "left_wrist_point":    lm(wrist),
         }
 
         sock.sendto(json.dumps(data).encode("utf-8"), (UDP_IP, UDP_PORT))
 
-        print(data)
+        print(f"elbow={left_elbow_angle:.1f}°  wrist=({wrist.x:.3f}, {wrist.y:.3f})")
 
     cv2.imshow("Camera Tracking", frame)
 
