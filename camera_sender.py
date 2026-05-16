@@ -11,7 +11,7 @@ from mediapipe.tasks import python
 from mediapipe.tasks.python import vision
 
 UDP_IP = "127.0.0.1"
-UDP_PORT = 5056
+UDP_PORT = 5060
 
 sock = socket.socket(socket.AF_INET, socket.SOCK_DGRAM)
 
@@ -58,6 +58,16 @@ def calculate_angle(a, b, c):
 
     return angle
 
+
+def landmark_to_dict(landmark):
+    return {
+        "x": landmark.x,
+        "y": landmark.y,
+        "z": landmark.z,
+        "visibility": landmark.visibility,
+    }
+
+
 while True:
     ret, frame = cap.read()
     if not ret:
@@ -88,6 +98,9 @@ while True:
         data = {
             "left_shoulder": left_shoulder_angle,
             "left_elbow": left_elbow_angle,
+            "left_shoulder_point": landmark_to_dict(shoulder),
+            "left_elbow_point": landmark_to_dict(elbow),
+            "left_wrist_point": landmark_to_dict(wrist),
         }
 
         sock.sendto(json.dumps(data).encode("utf-8"), (UDP_IP, UDP_PORT))
