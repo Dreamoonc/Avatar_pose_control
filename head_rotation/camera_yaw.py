@@ -24,20 +24,29 @@ options = PoseLandmarkerOptions(
 
 cap = cv2.VideoCapture(0)
 
-# Head calibration
+# Calibration (head + arm together)
 CALIBRATION_FRAMES = 30
 calib_samples = []
 neutral_x = 0.5
 neutral_y = 0.5
+arm_fwd_samples = []
+neutral_arm_fwd = 0.0
 calibrated = False
 
 
-def arm_raise_degrees(shoulder, wrist):
-    """Angle of arm raise: negative = arm down, 0 = horizontal, positive = arm up."""
+def arm_angles(shoulder, wrist):
+    """Returns (elevation_deg, azimuth_deg).
+    elevation: negative=down, 0=horizontal, positive=up
+    azimuth:   0=arm to side (T-pose), positive=arm forward
+    """
     dx = wrist.x - shoulder.x
-    dy = shoulder.y - wrist.y  # image y flipped: up = positive
-    angle = math.degrees(math.atan2(dy, abs(dx) + 1e-6))
-    return max(-90.0, min(90.0, angle))
+    dy = wrist.y - shoulder.y   # positive = wrist below shoulder
+    dz = wrist.z - shoulder.z   # negative = wrist closer to camera (forward)
+
+    horiz = math.sqrt(dx * dx + dz * dz) + 1e-6
+    elevation = max(-90.0, min(90.0, math.degrees(math.atan2(-dy, horiz))))
+    azimuth   = max(-90.0, min(90.0, math.degrees(math.atan2(-dz, abs(dx) + 1e-6))))
+    return elevation, azimuth
 
 
 with PoseLandmarker.create_from_options(options) as landmarker:
@@ -61,15 +70,20 @@ with PoseLandmarker.create_from_options(options) as landmarker:
             nose_y = lm[0].y
 
             if not calibrated:
+                shoulder = lm[11]
+                wrist    = lm[15]
+                _, raw_fwd = arm_angles(shoulder, wrist)
                 calib_samples.append((nose_x, nose_y))
+                arm_fwd_samples.append(raw_fwd)
                 remaining = CALIBRATION_FRAMES - len(calib_samples)
                 cv2.putText(
-                    frame, f"Look straight ahead... {remaining}", (10, 40),
+                    frame, f"Look ahead & arm to side... {remaining}", (10, 40),
                     cv2.FONT_HERSHEY_SIMPLEX, 1, (0, 200, 255), 2,
                 )
                 if len(calib_samples) >= CALIBRATION_FRAMES:
-                    neutral_x = sum(s[0] for s in calib_samples) / CALIBRATION_FRAMES
-                    neutral_y = sum(s[1] for s in calib_samples) / CALIBRATION_FRAMES
+                    neutral_x       = sum(s[0] for s in calib_samples) / CALIBRATION_FRAMES
+                    neutral_y       = sum(s[1] for s in calib_samples) / CALIBRATION_FRAMES
+                    neutral_arm_fwd = sum(arm_fwd_samples) / CALIBRATION_FRAMES
                     calibrated = True
                 cv2.imshow("Head + Arm Control", frame)
                 if cv2.waitKey(1) & 0xFF == ord("q"):
@@ -84,22 +98,24 @@ with PoseLandmarker.create_from_options(options) as landmarker:
             elbow    = lm[13]   # LEFT_ELBOW
             wrist    = lm[15]   # LEFT_WRIST
 
-            raise_deg = arm_raise_degrees(shoulder, wrist)
+            raise_deg, arm_forward_raw = arm_angles(shoulder, wrist)
+            arm_forward = max(-90.0, min(90.0, (arm_forward_raw - neutral_arm_fwd) * 4.5))
 
             # Wave: how far wrist is to the left/right of the elbow
-            wave = (wrist.x - elbow.x) * 200.0  # degrees-like value
+            wave = (wrist.x - elbow.x) * 200.0
 
             data = {
-                "yaw":       yaw,
-                "pitch":     pitch,
-                "arm_raise": raise_deg,
-                "wave":      wave,
+                "yaw":         yaw,
+                "pitch":       pitch,
+                "arm_raise":   raise_deg,
+                "wave":        wave,
+                "arm_forward": arm_forward,
             }
             sock.sendto(json.dumps(data).encode(), (UDP_IP, UDP_PORT))
 
             cv2.putText(
                 frame,
-                f"Yaw:{yaw:.0f} Pitch:{pitch:.0f} Raise:{raise_deg:.0f} Wave:{wave:.0f}",
+                f"Raise:{raise_deg:.0f} Fwd:{arm_forward:.0f} Wave:{wave:.0f}",
                 (10, 40), cv2.FONT_HERSHEY_SIMPLEX, 0.7, (0, 255, 0), 2,
             )
 

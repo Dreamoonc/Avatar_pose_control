@@ -17,8 +17,11 @@ ARM_SMOOTHING  = 0.35
 
 # Scale how much arm raise (degrees) maps to bone rotation.
 # Positive = arm raises forward/up. Flip sign if it goes the wrong way.
-ARM_RAISE_SCALE = -1.5  # negative: camera arm up → bone axis 0 negative → arm goes up
-ARM_RAISE_AXIS  = 0    # confirmed: -90=up, 0=horizontal, +90=down
+ARM_RAISE_SCALE   = -1.5  # negative: camera arm up → bone axis 0 negative → arm goes up
+ARM_RAISE_AXIS    = 0     # confirmed: -90=up, 0=horizontal, +90=down
+
+ARM_FORWARD_SCALE = 1.0   # arm_forward is already 0–90° range after camera calibration
+ARM_FORWARD_AXIS  = 2     # confirmed: axis 2 = arm forward
 
 # Wave: axis 1 = supination; when arm is raised this rotates hand left/right
 WAVE_SCALE = 0.03
@@ -40,8 +43,8 @@ _sock.setsockopt(socket.SOL_SOCKET, socket.SO_REUSEADDR, 1)
 _sock.bind((UDP_IP, UDP_PORT))
 ns["arm_sock"] = _sock
 
-latest   = {"yaw": 0.0, "pitch": 0.0, "arm_raise": 0.0, "wave": 0.0}
-smoothed = {"yaw": 0.0, "pitch": 0.0, "arm_raise": 0.0, "wave": 0.0}
+latest   = {"yaw": 0.0, "pitch": 0.0, "arm_raise": 0.0, "wave": 0.0, "arm_forward": 0.0}
+smoothed = {"yaw": 0.0, "pitch": 0.0, "arm_raise": 0.0, "wave": 0.0, "arm_forward": 0.0}
 
 
 def listen():
@@ -76,12 +79,15 @@ def apply_pose():
         head.rotation_euler[1] = math.radians(smoothed["yaw"])
         head.rotation_euler[0] = math.radians(smoothed["pitch"])
 
-    # Upper arm — raise / lower
+    # Upper arm — raise / lower + forward / backward
     upper_arm = obj.pose.bones.get(UPPER_ARM_BONE)
     if upper_arm:
         upper_arm.rotation_mode = "XYZ"
         upper_arm.rotation_euler[ARM_RAISE_AXIS] = (
             math.radians(smoothed["arm_raise"]) * ARM_RAISE_SCALE
+        )
+        upper_arm.rotation_euler[ARM_FORWARD_AXIS] = (
+            math.radians(smoothed["arm_forward"]) * ARM_FORWARD_SCALE
         )
 
     # Forearm — wave (side-to-side wrist movement)
@@ -92,6 +98,7 @@ def apply_pose():
 
     print(
         f"raise={smoothed['arm_raise']:.1f}° "
+        f"fwd={smoothed['arm_forward']:.1f}°  "
         f"wave={smoothed['wave']:.1f}  "
         f"yaw={smoothed['yaw']:.1f}°"
     )
