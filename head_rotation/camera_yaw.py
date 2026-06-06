@@ -25,7 +25,7 @@ options = PoseLandmarkerOptions(
 cap = cv2.VideoCapture(0)
 
 # Calibration (head + arm together)
-CALIBRATION_FRAMES = 30
+CALIBRATION_FRAMES = 60
 calib_samples = []
 neutral_x = 0.5
 neutral_y = 0.5
@@ -34,6 +34,19 @@ neutral_arm_fwd = 0.0
 arm_fwd_r_samples = []
 neutral_arm_fwd_r = 0.0
 calibrated = False
+
+
+def elbow_bend_angle(shoulder, elbow, wrist):
+    """Signed elbow bend: positive=forearm up (wrist above elbow), negative=forearm down."""
+    v1 = (elbow.x - shoulder.x, elbow.y - shoulder.y, elbow.z - shoulder.z)
+    v2 = (wrist.x - elbow.x,    wrist.y - elbow.y,    wrist.z - elbow.z)
+    dot  = v1[0]*v2[0] + v1[1]*v2[1] + v1[2]*v2[2]
+    mag1 = math.sqrt(v1[0]**2 + v1[1]**2 + v1[2]**2) + 1e-6
+    mag2 = math.sqrt(v2[0]**2 + v2[1]**2 + v2[2]**2) + 1e-6
+    angle = math.degrees(math.acos(max(-1.0, min(1.0, dot / (mag1 * mag2)))))
+    # In MediaPipe y increases downward, so wrist.y < elbow.y means wrist is higher
+    sign = 1.0 if wrist.y < elbow.y else -1.0
+    return max(-150.0, min(150.0, sign * angle))
 
 
 def arm_angles(shoulder, wrist):
@@ -117,6 +130,7 @@ with PoseLandmarker.create_from_options(options) as landmarker:
             raise_deg, arm_forward_raw = arm_angles(shoulder, wrist)
             arm_forward = max(-90.0, min(90.0, (arm_forward_raw - neutral_arm_fwd) * 4.5))
             wave = (wrist.x - elbow.x) * 200.0
+            elbow_bend   = elbow_bend_angle(shoulder, elbow, wrist)
 
             # --- right arm ---
             r_shoulder = lm[12]
@@ -125,6 +139,7 @@ with PoseLandmarker.create_from_options(options) as landmarker:
             raise_deg_r, arm_forward_raw_r = arm_angles(r_shoulder, r_wrist)
             arm_forward_r = max(-90.0, min(90.0, (arm_forward_raw_r - neutral_arm_fwd_r) * 4.5))
             wave_r = (r_wrist.x - r_elbow.x) * 200.0
+            elbow_bend_r = elbow_bend_angle(r_shoulder, r_elbow, r_wrist)
 
             data = {
                 "yaw":           yaw,
@@ -135,6 +150,8 @@ with PoseLandmarker.create_from_options(options) as landmarker:
                 "arm_raise_r":   raise_deg_r,
                 "wave_r":        wave_r,
                 "arm_forward_r": arm_forward_r,
+                "elbow_bend":    elbow_bend,
+                "elbow_bend_r":  elbow_bend_r,
             }
             sock.sendto(json.dumps(data).encode(), (UDP_IP, UDP_PORT))
 

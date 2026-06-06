@@ -22,7 +22,7 @@ ARM_RAISE_SCALE   = -1.5
 ARM_RAISE_AXIS    = 0
 ARM_FORWARD_SCALE = 1.0
 ARM_FORWARD_AXIS  = 2
-WAVE_SCALE        = 0.03
+WAVE_SCALE        = -0.03
 WAVE_AXIS         = 1
 
 # Right arm — mirrored: flip raise & wave signs if wrong direction
@@ -33,6 +33,10 @@ ARM_FORWARD_DEADZONE = 5.0   # degrees — zero out residual lean when arms are 
 R_ARM_FORWARD_AXIS  = 2
 R_WAVE_SCALE        = -0.03
 R_WAVE_AXIS         = 1
+
+# Elbow bend — axis 0, negative = natural forward curl (confirmed both sides)
+ELBOW_BEND_AXIS  = 0
+ELBOW_BEND_SCALE = -1.0
 
 ns = bpy.app.driver_namespace
 
@@ -51,9 +55,11 @@ _sock.bind((UDP_IP, UDP_PORT))
 ns["arm_sock"] = _sock
 
 latest   = {"yaw": 0.0, "pitch": 0.0, "arm_raise": 0.0, "wave": 0.0, "arm_forward": 0.0,
-            "arm_raise_r": 0.0, "wave_r": 0.0, "arm_forward_r": 0.0}
+            "arm_raise_r": 0.0, "wave_r": 0.0, "arm_forward_r": 0.0,
+            "elbow_bend": 0.0, "elbow_bend_r": 0.0}
 smoothed = {"yaw": 0.0, "pitch": 0.0, "arm_raise": 0.0, "wave": 0.0, "arm_forward": 0.0,
-            "arm_raise_r": 0.0, "wave_r": 0.0, "arm_forward_r": 0.0}
+            "arm_raise_r": 0.0, "wave_r": 0.0, "arm_forward_r": 0.0,
+            "elbow_bend": 0.0, "elbow_bend_r": 0.0}
 
 
 def listen():
@@ -99,11 +105,12 @@ def apply_pose():
         fwd = 0.0 if abs(fwd) < ARM_FORWARD_DEADZONE else fwd
         upper_arm.rotation_euler[ARM_FORWARD_AXIS] = math.radians(fwd) * ARM_FORWARD_SCALE
 
-    # Left forearm — wave
+    # Left forearm — elbow bend
     forearm = obj.pose.bones.get(FOREARM_BONE)
     if forearm:
         forearm.rotation_mode = "XYZ"
         forearm.rotation_euler[WAVE_AXIS] = smoothed["wave"] * WAVE_SCALE
+        forearm.rotation_euler[ELBOW_BEND_AXIS] = math.radians(smoothed["elbow_bend"]) * ELBOW_BEND_SCALE
 
     # Right upper arm
     upper_arm_r = obj.pose.bones.get(UPPER_ARM_BONE_R)
@@ -116,11 +123,12 @@ def apply_pose():
         fwd_r = 0.0 if abs(fwd_r) < ARM_FORWARD_DEADZONE else fwd_r
         upper_arm_r.rotation_euler[R_ARM_FORWARD_AXIS] = math.radians(fwd_r) * R_ARM_FORWARD_SCALE
 
-    # Right forearm — wave
+    # Right forearm — elbow bend
     forearm_r = obj.pose.bones.get(FOREARM_BONE_R)
     if forearm_r:
         forearm_r.rotation_mode = "XYZ"
         forearm_r.rotation_euler[R_WAVE_AXIS] = smoothed["wave_r"] * R_WAVE_SCALE
+        forearm_r.rotation_euler[ELBOW_BEND_AXIS] = math.radians(smoothed["elbow_bend_r"]) * ELBOW_BEND_SCALE
 
     print(
         f"raise={smoothed['arm_raise']:.1f}° "
