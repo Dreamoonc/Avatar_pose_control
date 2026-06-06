@@ -31,6 +31,8 @@ neutral_x = 0.5
 neutral_y = 0.5
 arm_fwd_samples = []
 neutral_arm_fwd = 0.0
+arm_fwd_r_samples = []
+neutral_arm_fwd_r = 0.0
 calibrated = False
 
 
@@ -43,9 +45,14 @@ def arm_angles(shoulder, wrist):
     dy = wrist.y - shoulder.y   # positive = wrist below shoulder
     dz = wrist.z - shoulder.z   # negative = wrist closer to camera (forward)
 
-    horiz = math.sqrt(dx * dx + dz * dz) + 1e-6
+    arm_len = math.sqrt(dx * dx + dy * dy + dz * dz) + 1e-6
+    horiz   = math.sqrt(dx * dx + dz * dz) + 1e-6
     elevation = max(-90.0, min(90.0, math.degrees(math.atan2(-dy, horiz))))
-    azimuth   = max(-90.0, min(90.0, math.degrees(math.atan2(-dz, abs(dx) + 1e-6))))
+
+    # Normalize dz by full arm length — stable when arm hangs down (dy large, dx→0)
+    dz_norm = max(-1.0, min(1.0, -dz / arm_len))
+    azimuth = max(-90.0, min(90.0, math.degrees(math.asin(dz_norm))))
+
     return elevation, azimuth
 
 
@@ -75,15 +82,23 @@ with PoseLandmarker.create_from_options(options) as landmarker:
                 _, raw_fwd = arm_angles(shoulder, wrist)
                 calib_samples.append((nose_x, nose_y))
                 arm_fwd_samples.append(raw_fwd)
+
+                # right arm calibration
+                r_shoulder_c = lm[12]
+                r_wrist_c    = lm[16]
+                _, r_raw_fwd = arm_angles(r_shoulder_c, r_wrist_c)
+                arm_fwd_r_samples.append(r_raw_fwd)
+
                 remaining = CALIBRATION_FRAMES - len(calib_samples)
                 cv2.putText(
-                    frame, f"Look ahead & arm to side... {remaining}", (10, 40),
+                    frame, f"Look ahead & both arms to side... {remaining}", (10, 40),
                     cv2.FONT_HERSHEY_SIMPLEX, 1, (0, 200, 255), 2,
                 )
                 if len(calib_samples) >= CALIBRATION_FRAMES:
-                    neutral_x       = sum(s[0] for s in calib_samples) / CALIBRATION_FRAMES
-                    neutral_y       = sum(s[1] for s in calib_samples) / CALIBRATION_FRAMES
-                    neutral_arm_fwd = sum(arm_fwd_samples) / CALIBRATION_FRAMES
+                    neutral_x         = sum(s[0] for s in calib_samples) / CALIBRATION_FRAMES
+                    neutral_y         = sum(s[1] for s in calib_samples) / CALIBRATION_FRAMES
+                    neutral_arm_fwd   = sum(arm_fwd_samples) / CALIBRATION_FRAMES
+                    neutral_arm_fwd_r = sum(arm_fwd_r_samples) / CALIBRATION_FRAMES
                     calibrated = True
                 cv2.imshow("Head + Arm Control", frame)
                 if cv2.waitKey(1) & 0xFF == ord("q"):
@@ -98,18 +113,28 @@ with PoseLandmarker.create_from_options(options) as landmarker:
             elbow    = lm[13]   # LEFT_ELBOW
             wrist    = lm[15]   # LEFT_WRIST
 
+            # --- left arm ---
             raise_deg, arm_forward_raw = arm_angles(shoulder, wrist)
             arm_forward = max(-90.0, min(90.0, (arm_forward_raw - neutral_arm_fwd) * 4.5))
-
-            # Wave: how far wrist is to the left/right of the elbow
             wave = (wrist.x - elbow.x) * 200.0
 
+            # --- right arm ---
+            r_shoulder = lm[12]
+            r_elbow    = lm[14]
+            r_wrist    = lm[16]
+            raise_deg_r, arm_forward_raw_r = arm_angles(r_shoulder, r_wrist)
+            arm_forward_r = max(-90.0, min(90.0, (arm_forward_raw_r - neutral_arm_fwd_r) * 4.5))
+            wave_r = (r_wrist.x - r_elbow.x) * 200.0
+
             data = {
-                "yaw":         yaw,
-                "pitch":       pitch,
-                "arm_raise":   raise_deg,
-                "wave":        wave,
-                "arm_forward": arm_forward,
+                "yaw":           yaw,
+                "pitch":         pitch,
+                "arm_raise":     raise_deg,
+                "wave":          wave,
+                "arm_forward":   arm_forward,
+                "arm_raise_r":   raise_deg_r,
+                "wave_r":        wave_r,
+                "arm_forward_r": arm_forward_r,
             }
             sock.sendto(json.dumps(data).encode(), (UDP_IP, UDP_PORT))
 

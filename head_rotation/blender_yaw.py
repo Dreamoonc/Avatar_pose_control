@@ -11,21 +11,28 @@ ARMATURE_NAME    = "Armature"
 HEAD_BONE        = "mixamorig:Head"
 UPPER_ARM_BONE   = "mixamorig:LeftArm"
 FOREARM_BONE     = "mixamorig:LeftForeArm"
+UPPER_ARM_BONE_R = "mixamorig:RightArm"
+FOREARM_BONE_R   = "mixamorig:RightForeArm"
 
-HEAD_SMOOTHING = 0.15
-ARM_SMOOTHING  = 0.35
+HEAD_SMOOTHING = 0.08
+ARM_SMOOTHING  = 0.10
 
-# Scale how much arm raise (degrees) maps to bone rotation.
-# Positive = arm raises forward/up. Flip sign if it goes the wrong way.
-ARM_RAISE_SCALE   = -1.5  # negative: camera arm up → bone axis 0 negative → arm goes up
-ARM_RAISE_AXIS    = 0     # confirmed: -90=up, 0=horizontal, +90=down
+# Left arm — confirmed axes
+ARM_RAISE_SCALE   = -1.5
+ARM_RAISE_AXIS    = 0
+ARM_FORWARD_SCALE = 1.0
+ARM_FORWARD_AXIS  = 2
+WAVE_SCALE        = 0.03
+WAVE_AXIS         = 1
 
-ARM_FORWARD_SCALE = 1.0   # arm_forward is already 0–90° range after camera calibration
-ARM_FORWARD_AXIS  = 2     # confirmed: axis 2 = arm forward
-
-# Wave: axis 1 = supination; when arm is raised this rotates hand left/right
-WAVE_SCALE = 0.03
-WAVE_AXIS  = 1
+# Right arm — mirrored: flip raise & wave signs if wrong direction
+R_ARM_RAISE_SCALE   = -1.5  # same sign as left
+R_ARM_RAISE_AXIS    = 0
+R_ARM_FORWARD_SCALE  = -1.0  # opposite sign to left
+ARM_FORWARD_DEADZONE = 5.0   # degrees — zero out residual lean when arms are down
+R_ARM_FORWARD_AXIS  = 2
+R_WAVE_SCALE        = -0.03
+R_WAVE_AXIS         = 1
 
 ns = bpy.app.driver_namespace
 
@@ -43,8 +50,10 @@ _sock.setsockopt(socket.SOL_SOCKET, socket.SO_REUSEADDR, 1)
 _sock.bind((UDP_IP, UDP_PORT))
 ns["arm_sock"] = _sock
 
-latest   = {"yaw": 0.0, "pitch": 0.0, "arm_raise": 0.0, "wave": 0.0, "arm_forward": 0.0}
-smoothed = {"yaw": 0.0, "pitch": 0.0, "arm_raise": 0.0, "wave": 0.0, "arm_forward": 0.0}
+latest   = {"yaw": 0.0, "pitch": 0.0, "arm_raise": 0.0, "wave": 0.0, "arm_forward": 0.0,
+            "arm_raise_r": 0.0, "wave_r": 0.0, "arm_forward_r": 0.0}
+smoothed = {"yaw": 0.0, "pitch": 0.0, "arm_raise": 0.0, "wave": 0.0, "arm_forward": 0.0,
+            "arm_raise_r": 0.0, "wave_r": 0.0, "arm_forward_r": 0.0}
 
 
 def listen():
@@ -86,15 +95,32 @@ def apply_pose():
         upper_arm.rotation_euler[ARM_RAISE_AXIS] = (
             math.radians(smoothed["arm_raise"]) * ARM_RAISE_SCALE
         )
-        upper_arm.rotation_euler[ARM_FORWARD_AXIS] = (
-            math.radians(smoothed["arm_forward"]) * ARM_FORWARD_SCALE
-        )
+        fwd = smoothed["arm_forward"]
+        fwd = 0.0 if abs(fwd) < ARM_FORWARD_DEADZONE else fwd
+        upper_arm.rotation_euler[ARM_FORWARD_AXIS] = math.radians(fwd) * ARM_FORWARD_SCALE
 
-    # Forearm — wave (side-to-side wrist movement)
+    # Left forearm — wave
     forearm = obj.pose.bones.get(FOREARM_BONE)
     if forearm:
         forearm.rotation_mode = "XYZ"
         forearm.rotation_euler[WAVE_AXIS] = smoothed["wave"] * WAVE_SCALE
+
+    # Right upper arm
+    upper_arm_r = obj.pose.bones.get(UPPER_ARM_BONE_R)
+    if upper_arm_r:
+        upper_arm_r.rotation_mode = "XYZ"
+        upper_arm_r.rotation_euler[R_ARM_RAISE_AXIS] = (
+            math.radians(smoothed["arm_raise_r"]) * R_ARM_RAISE_SCALE
+        )
+        fwd_r = smoothed["arm_forward_r"]
+        fwd_r = 0.0 if abs(fwd_r) < ARM_FORWARD_DEADZONE else fwd_r
+        upper_arm_r.rotation_euler[R_ARM_FORWARD_AXIS] = math.radians(fwd_r) * R_ARM_FORWARD_SCALE
+
+    # Right forearm — wave
+    forearm_r = obj.pose.bones.get(FOREARM_BONE_R)
+    if forearm_r:
+        forearm_r.rotation_mode = "XYZ"
+        forearm_r.rotation_euler[R_WAVE_AXIS] = smoothed["wave_r"] * R_WAVE_SCALE
 
     print(
         f"raise={smoothed['arm_raise']:.1f}° "
