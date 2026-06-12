@@ -35,7 +35,7 @@ hand_options = HandLandmarkerOptions(
     min_tracking_confidence=0.3,
 )
 
-# Webcam is front-facing: MediaPipe "Left" hand = user's RIGHT hand (mirror)
+# Webcam is front-facing: MediaPipe "Left" hand = user's RIGHT hand 
 MIRROR_HANDEDNESS = True
 
 # Hand landmark indices: (MCP, PIP, DIP, TIP) per finger
@@ -49,7 +49,7 @@ FINGER_LANDMARKS = {
 
 cap = cv2.VideoCapture(0)
 
-# Persistent finger/wrist state — keeps last known value when a hand leaves the frame
+# Persistent finger/wrist state :
 finger_state = {f"finger_{n.lower()}_{s}": 0.0
                 for n in FINGER_LANDMARKS for s in ("l", "r")}
 finger_state["wrist_roll_l"] = 0.0
@@ -161,9 +161,9 @@ with PoseLandmarker.create_from_options(pose_options) as pose_lm, \
         # Only update the side that is currently visible; keep last known value otherwise
         if hand_result.hand_landmarks:
             for i, hand_lms in enumerate(hand_result.hand_landmarks):
-                # Use wrist X position to determine which hand — more reliable than
+                # Use wrist X position to determine which hand
                 # handedness labels, which can flip when only one hand is visible.
-                # Front-facing camera: wrist on left side of image = user's right hand.
+                # Front-facing camera: wrist on left side of image = right hand.
                 wrist_x = hand_lms[0].x
                 if MIRROR_HANDEDNESS:
                     side = "r" if wrist_x < 0.5 else "l"

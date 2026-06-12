@@ -17,8 +17,8 @@ WRIST_BONE_L     = "mixamorig:LeftHand"
 
 WRIST_BONE_R     = "mixamorig:RightHand"
 
-WRIST_ROLL_AXIS    = 2      # Z axis — change to 0 or 1 if wrong
-WRIST_ROLL_SCALE_L =  1.5    # flip sign if roll goes wrong direction
+WRIST_ROLL_AXIS    = 2      # Z axis 
+WRIST_ROLL_SCALE_L =  1.5    # roll direction
 WRIST_ROLL_SCALE_R = 1.5
 
 # Finger bones — bones 1-3 curled (4 is the fingertip, skip it)
@@ -28,12 +28,12 @@ FINGER_CURL_SCALE_L =  2.0
 FINGER_CURL_SCALE_R = -2.0
 THUMB_CURL_SCALE_L  = -2.0  # thumb anatomy is mirrored
 THUMB_CURL_SCALE_R  =  2.5
-THUMB_OPEN_AXIS_R  = 2      # Y axis — confirmed for RightHandThumb1
-THUMB_OPEN_AXIS_L  = 2      # X axis — left bone is mirrored; try 1 or 2 if wrong
-THUMB_OPEN_SCALE_R =  1.0   # flip sign if right thumb moves the wrong way
-THUMB_OPEN_SCALE_L =  -1.0   # flip sign if left thumb moves the wrong way
-THUMB_OPEN_REST_R  = 90.0   # confirmed rest angle for right
-THUMB_OPEN_REST_L  = 90.0   # tune if left thumb is offset at rest
+THUMB_OPEN_AXIS_R  = 2     # Z axis
+THUMB_OPEN_AXIS_L  = 2     # Z axis
+THUMB_OPEN_SCALE_R =  1.0   #  right thumb moves
+THUMB_OPEN_SCALE_L =  -1.0   # left thumb moves 
+THUMB_OPEN_REST_R  = 90.0   #  angle for right
+THUMB_OPEN_REST_L  = 90.0   
 FINGER_SMOOTHING    = 0.1
 
 HEAD_SMOOTHING = 0.25
@@ -47,16 +47,16 @@ ARM_FORWARD_AXIS  = 2
 WAVE_SCALE        = -0.03
 WAVE_AXIS         = 1
 
-# Right arm — mirrored: flip raise & wave signs if wrong direction
+# Right arm 
 R_ARM_RAISE_SCALE   = -1.5  # same sign as left
 R_ARM_RAISE_AXIS    = 0
 R_ARM_FORWARD_SCALE  = -1.0  # opposite sign to left
-ARM_FORWARD_DEADZONE = 5.0   # degrees — zero out residual lean when arms are down
+ARM_FORWARD_DEADZONE = 5.0   # zero out residual lean when arms are down
 R_ARM_FORWARD_AXIS  = 2
 R_WAVE_SCALE        = -0.03
 R_WAVE_AXIS         = 1
 
-# Elbow bend — axis 0, negative = natural forward curl (confirmed both sides)
+# Elbow bend on axis 0, negative = natural forward curl 
 ELBOW_BEND_AXIS  = 0
 ELBOW_BEND_SCALE = -1.0
 
@@ -153,7 +153,7 @@ def apply_pose():
         head.rotation_euler[1] = math.radians(smoothed["yaw"])
         head.rotation_euler[0] = math.radians(smoothed["pitch"])
 
-    # Upper arm — raise / lower + forward / backward
+    # Upper arm : raise / lower + forward / backward
     upper_arm = obj.pose.bones.get(UPPER_ARM_BONE)
     if upper_arm:
         upper_arm.rotation_mode = "XYZ"
@@ -164,7 +164,7 @@ def apply_pose():
         fwd = 0.0 if abs(fwd) < ARM_FORWARD_DEADZONE else fwd
         upper_arm.rotation_euler[ARM_FORWARD_AXIS] = math.radians(fwd) * ARM_FORWARD_SCALE
 
-    # Left forearm — elbow bend
+    # Left forearm : elbow bend
     forearm = obj.pose.bones.get(FOREARM_BONE)
     if forearm:
         forearm.rotation_mode = "XYZ"
@@ -182,7 +182,7 @@ def apply_pose():
         fwd_r = 0.0 if abs(fwd_r) < ARM_FORWARD_DEADZONE else fwd_r
         upper_arm_r.rotation_euler[R_ARM_FORWARD_AXIS] = math.radians(fwd_r) * R_ARM_FORWARD_SCALE
 
-    # Right forearm — elbow bend
+    # Right forearm / elbow bend
     forearm_r = obj.pose.bones.get(FOREARM_BONE_R)
     if forearm_r:
         forearm_r.rotation_mode = "XYZ"
@@ -207,7 +207,7 @@ def apply_pose():
                 br.rotation_mode = "XYZ"
                 br.rotation_euler[FINGER_CURL_AXIS] = math.radians(curl_r) * scale_r
 
-    # Thumb abduction — Thumb1 (CMC) bone drives the outward spread
+    # Thumb abduction  bone drives the outward spread
     for side, axis, scale, rest, bone_name in (
         ("l", THUMB_OPEN_AXIS_L, THUMB_OPEN_SCALE_L, THUMB_OPEN_REST_L, "mixamorig:LeftHandThumb1"),
         ("r", THUMB_OPEN_AXIS_R, THUMB_OPEN_SCALE_R, THUMB_OPEN_REST_R, "mixamorig:RightHandThumb1"),
@@ -219,7 +219,7 @@ def apply_pose():
                 math.radians(smoothed[f"thumb_open_{side}"] - rest) * scale
             )
 
-    # Wrist roll — rotates LeftHand/RightHand for thumbs-up / thumbs-down
+    # Wrist roll : rotates LeftHand/RightHand for thumbs-up / thumbs-down
     wrist_l = obj.pose.bones.get(WRIST_BONE_L)
     if wrist_l:
         wrist_l.rotation_mode = "XYZ"
